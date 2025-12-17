@@ -1,0 +1,47 @@
+# Define physical location of damage
+Location_dict = {
+   
+    "Building Interior": "Any indoor area of the facility that does not fall under a more specific predefined location category. This includes general interior spaces where the exact room, zone, or functional area cannot be identified from the problem description.",
+    "Building Exterior": "Any area outside the facility structure that does not fall under a more specific exterior category.This includes general outdoor spaces where the exact location - such as parking lot, Garden center or Greenhouse-cannot be deretmined from the problem description.",
+    "Garden Center": "The designated outdoor or semi-outdoor retail area dedicated to plants, soil, garden tools, and lawn-care products. Includes greenhouse structures, plant displays, irrigation lines, and all customer-accessible garden retail space.",
+    "Restroom": "Any designated facility area containing toilets, urinals, sinks, or handwashing fixtures. Includes both public and staff restrooms, washrooms, and associated plumbing areas.",
+
+}
+
+
+# Optional: Keyword boost
+boost_keywords = {
+    "Garden Center": [
+        "GARDEN CENTER DRIVE", "garden", "OSLG", ...
+    ],
+    "Janitor/Maintenance/Utility closet": [
+        "JANITOR/UTILITY ROOM", "janitor room", "utility", ...
+    ],
+    "Restroom": [
+        "RESTROOM AREA", "RESTROOMS", "bathrooms", "Mens restroom", "Men's restroom", "Men's room", "toilets", ...
+    ],
+    "Building Interior": [
+        "BUILDING INTERIOR", "INTERIOR", "aisle", "bay", "phone cabinet", "vestibule", "self check out area", "computer room", ...
+    ],
+    "Building Exterior": [
+        "outside garden", "BUILDING EXTERIOR", "outside","fountain", "outside lawn", "roof", "sprinkler system", "Garden Gate", "Hose reel", "ground", ...
+    ],
+    "Chargeback": [
+        "Chargeback for Labor Overcharge", ...
+    ],
+    "Greenhouse": [
+        "greenhouse", ...
+    ],
+    "Parking Lot": [
+        "parking lot", ...
+    ],
+    "Sales Floor": [
+        "SALES FLOOR", "sales floor", ...
+    ],
+    "BreakRoom": [
+        "BREAK ROOM", "break room", ...
+    ],
+    "Fire Room": [
+        "Sprinkler room", "pump room", ...
+    ],
+    "Other": []
