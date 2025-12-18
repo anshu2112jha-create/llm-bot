@@ -1,0 +1,73 @@
+import requests
+import json
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+ 
+requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
+ 
+def get_token():
+    """Function to fetch a new token."""
+    url = "https://apis-b2b-dev.lowes.com/v1/oauthprovider/oauth2/token"
+    payload = (
+        'client_id=[client_id]&'
+        'client_secret=[client_secret]&'
+        'grant_type=client_credentials'
+    )
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+ 
+    response = requests.post(url, headers=headers, data=payload)
+ 
+    if response.status_code == 200:
+        token_data = response.json()
+        return token_data.get("access_token")
+    else:
+        print("Failed to fetch token:", response.status_code, response.text)
+        return None
+ 
+def get_llm_resp():
+    """Function to get LLM response using a dynamically fetched token."""
+    # Fetch the token
+    token = get_token()
+    if not token:
+        print("Unable to proceed without a valid token.")
+        return
+ 
+    # Prepare the payload and headers for the LLM API
+    GENAI_URL = "https://apis-b2b-dev.lowes.com/llama70b/v1/chat/completions"
+    payload = json.dumps({
+        "model": "meta-llama/Llama-3.3-70B-Instruct",
+        "messages": [
+            {"role": "system", "content": "You are a helpful, pattern-following assistant."},
+            {"role": "user", "content": "create a new language with english letters"}
+        ],
+        "temperature": 0,
+        "top_p": 1,
+        "n": 1,
+        "stream": False,
+        "stop": None,
+        "max_tokens": 10000,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
+        "user": "1234"
+    })
+ 
+    headers = {
+        'accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {token}'
+    }
+ 
+    response = requests.post(GENAI_URL, headers=headers, data=payload, verify=False)
+ 
+    if response.status_code == 200:
+        response_data = response.json()
+        assistant_message = response_data['choices'][0]['message']['content']
+        print("Assistant Response:", assistant_message)
+        return assistant_message
+    else:
+        print("Failed to get LLM response:", response.status_code, response.text)
+        return None
+ 
+if __name__ == '__main__':
+    get_llm_resp()
