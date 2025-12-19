@@ -1,0 +1,141 @@
+# chatbot_server.py
+import os
+import time
+import requests
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+# ---------- CONFIG ----------
+CLIENT_ID = os.getenv("CLIENT_ID", "your_client_id")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET", "your_client_secret")
+TOKEN_URL = os.getenv("TOKEN_URL", "https://auth.your-onprem/token")  # OAuth2 token endpoint
+API_URL = os.getenv("API_URL", "https://api.your-onprem/v1/chat/completions")
+MODEL_NAME = os.getenv("MODEL_NAME", "onprem-openai-gpt-oss-120b")
+
+# Allowed canonical labels: enforce these on responses
+WHAT_LABELS = ["Leak", "Pipe burst", "Slow drainage", "Clog/Blockage", "Overflow",
+               "No water", "Low pressure", "Fixture broken", "Valve issue", "Unknown"]
+WHERE_LABELS = ["Restroom", "Garden Center", "Roof/Exterior", "Building exterior",
+                "Aisle", "Backroom/Stockroom", "Kitchen", "Office", "Loading dock", "Unknown"]
+
+# ---- Simple token cache ----
+_cached_token = {"access_token": None, "expires_at": 0}
+
+def get_token():
+    global _cached_token
+    now = time.time()
+    if _cached_token["access_token"] and _cached_token["expires_at"] - 30 > now:
+        return _cached_token["access_token"]
+
+    # Request token via client_credentials
+    resp = requests.post(
+        TOKEN_URL,
+        data={"grant_type": "client_credentials"},
+        auth=(CLIENT_ID, CLIENT_SECRET),
+        timeout=10
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    access_token = data["access_token"]
+    expires_in = data.get("expires_in", 3600)
+    _cached_token = {"access_token": access_token, "expires_at": now + expires_in}
+    return access_token
+
+# ---- Prompt template for classification (few-shot) ----
+PROMPT_PREFIX = """
+You are a classifier that maps a short plumbing/repair problem description to two canonical labels.
+Allowed 'What' labels: {what_labels}
+Allowed 'Where' labels: {where_labels}
+
+When given a description, reply ONLY with a JSON object like:
+{{"What":"<one of allowed What labels>","Where":"<one of allowed Where labels>","Explanation":"<one-sentence justification>"}}
+
+Examples:
+"Toilet leaking badly under tank" => What: Leak, Where: Restroom
+"Large water pooling outside near building foundation" => What: Leak, Where: Building exterior
+
+Now process the following input.
+""".strip()
+
+def build_prompt(description):
+    return PROMPT_PREFIX.format(
+        what_labels=", ".join(WHAT_LABELS),
+        where_labels=", ".join(WHERE_LABELS)
+    ) + f"\n\nDescription: \"{description.strip()}\"\n\nOutput:"
+
+# ---- API call to on-prem model ----
+def call_model(prompt, token, max_tokens=80):
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    body = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": "You are a concise classifier."},
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": max_tokens,
+        "temperature": 0.0
+    }
+    resp = requests.post(API_URL, headers=headers, json=body, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+# ---- Utility to safely extract JSON object from model reply ----
+import json, re
+def parse_model_response(resp_json):
+    # This depends on gateway; common path:
+    try:
+        content = resp_json["choices"][0]["message"]["content"]
+    except Exception:
+        # fallback: whole response as text
+        content = str(resp_json)
+    # Extract first {...} JSON substring
+    m = re.search(r"\{.*\}", content, flags=re.DOTALL)
+    if not m:
+        # if not JSON, try simple heuristics
+        return {"What":"Unknown","Where":"Unknown","Explanation":content.strip()}
+    try:
+        parsed = json.loads(m.group(0))
+    except Exception:
+        # attempt to fix common mistakes (single quotes -> double)
+        fixed = m.group(0).replace("'", '"')
+        try:
+            parsed = json.loads(fixed)
+        except Exception:
+            return {"What":"Unknown","Where":"Unknown","Explanation":content.strip()}
+    # enforce allowed labels
+    what = parsed.get("What","Unknown")
+    where = parsed.get("Where","Unknown")
+    if what not in WHAT_LABELS:
+        what = "Unknown"
+    if where not in WHERE_LABELS:
+        where = "Unknown"
+    explanation = parsed.get("Explanation", "")
+    return {"What": what, "Where": where, "Explanation": explanation}
+
+# ---- Flask endpoints ----
+@app.route("/classify", methods=["POST"])
+def classify():
+    payload = request.get_json(force=True)
+    description = payload.get("description","").strip()
+    if not description:
+        return jsonify({"error":"description required"}), 400
+    try:
+        token = get_token()
+        prompt = build_prompt(description)
+        resp_json = call_model(prompt, token)
+        parsed = parse_model_response(resp_json)
+        return jsonify({"input":description, "result": parsed})
+    except requests.HTTPError as e:
+        return jsonify({"error":"model request failed","details":str(e), "response": getattr(e, "response", None).text if getattr(e,"response",None) else ""}), 502
+    except Exception as ex:
+        return jsonify({"error":"internal error","details":str(ex)}), 500
+
+# health
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status":"ok"})
+
+if __name__ == "__main__":
+    # for testing only. Use gunicorn/uvicorn in production
+    app.run(host="0.0.0.0", port=8080, debug=True)
