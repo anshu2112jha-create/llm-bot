@@ -1,0 +1,71 @@
+import requests
+import json
+
+# -------------------------------------------------
+# CONFIG — MUST MATCH POSTMAN
+# -------------------------------------------------
+LLM_API_URL = "https://apis-b2b-dev.lowes.com/llama3/v1/chat/completions"
+MODEL_NAME = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+
+# 🔴 TEMP: paste a VALID token here
+API_TOKEN = "PASTE_VALID_BEARER_TOKEN_HERE"
+
+HEADERS = {
+    "Authorization": f"Bearer {API_TOKEN}",
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+}
+
+# -------------------------------------------------
+# GENERIC CHAT FUNCTION
+# -------------------------------------------------
+def chat(prompt):
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant. Answer clearly and concisely."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0,
+        "top_p": 1,
+        "max_tokens": 150,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
+        "user": "test-user"
+    }
+
+    response = requests.post(
+        LLM_API_URL,
+        headers=HEADERS,
+        data=json.dumps(payload),
+        verify=False
+    )
+
+    print("STATUS:", response.status_code)
+
+    if response.status_code != 200:
+        print("ERROR RESPONSE:", response.text)
+        return None
+
+    return response.json()["choices"][0]["message"]["content"]
+
+
+# -------------------------------------------------
+# CHAT LOOP
+# -------------------------------------------------
+if __name__ == "__main__":
+    print("💬 Generic LLM Chatbot (type 'exit' to quit)\n")
+
+    while True:
+        q = input("You: ")
+        if q.lower() == "exit":
+            break
+
+        ans = chat(q)
+        print("Bot:", ans, "\n")
