@@ -1,0 +1,2 @@
+from the column problem Description, extract physical location of the damage, for example - Garden Center, Outside lawn, Restroom, Bathroom, Parking lot, Building i
+nterior, building exterior, etc in a new column.
